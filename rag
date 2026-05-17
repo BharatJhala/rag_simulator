@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAG Pipeline Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #050816;
+      --bg-elevated: #0b1020;
+      --accent: #6366f1;
+      --accent-soft: rgba(99, 102, 241, 0.15);
+      --accent-strong: #4f46e5;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border-subtle: #1f2933;
+      --danger: #f97373;
+      --success: #4ade80;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.55);
+      --shadow-chip: 0 10px 25px rgba(15, 23, 42, 0.7);
+      --transition-fast: 0.18s ease-out;
+      --transition-med: 0.25s ease-out;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      background: radial-gradient(circle at top, #111827 0, #020617 45%, #000 100%);
+      color: var(--text);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 1200px;
+      background: linear-gradient(145deg, #020617 0%, #020617 40%, #020617 100%);
+      border-radius: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      box-shadow: 0 30px 80px rgba(15, 23, 42, 0.9);
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr);
+      overflow: hidden;
+      position: relative;
+      isolation: isolate;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 12px;
+      }
+      .app-shell {
+        grid-template-columns: minmax(0, 1fr);
+        border-radius: 18px;
+      }
+    }
+
+    .app-shell::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.08), transparent 55%),
+        radial-gradient(circle at 100% 0%, rgba(129, 140, 248, 0.12), transparent 55%),
+        radial-gradient(circle at 50% 100%, rgba(52, 211, 153, 0.08), transparent 55%);
+      opacity: 0.9;
+      z-index: -1;
+    }
+
+    .pane {
+      padding: 22px 22px 20px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .pane + .pane {
+      border-left: 1px solid rgba(15, 23, 42, 0.9);
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    @media (max-width: 900px) {
+      .pane + .pane {
+        border-left: none;
+        border-top: 1px solid rgba(15, 23, 42, 0.9);
+      }
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-pill {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top left, rgba(148, 163, 184, 0.18), transparent 60%);
+    }
+
+    .title-pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #22c55e 0, #16a34a 40%, #052e16 100%);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.9);
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .step-badge {
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), #020617);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .step-badge span {
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .step-dot.active {
+      background: #6366f1;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.9);
+    }
+
+    .step-dot.done {
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+    }
+
+    .section {
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), #020617);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 14px 14px 12px;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title span {
+      color: #e5e7eb;
+      font-weight: 600;
+    }
+
+    .section-chip {
+      font-size: 0.7rem;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top right, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    .section-chip-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .section-chip-dot.ok {
+      background: #22c55e;
+    }
+
+    .section-chip-dot.warn {
+      background: #facc15;
+    }
+
+    .section-chip-dot.err {
+      background: #f97373;
+    }
+
+    .section-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .row > * {
+      flex: 1;
+    }
+
+    @media (max-width: 900px) {
+      .row {
+        flex-direction: column;
+      }
+    }
+
+    textarea,
+    input[type="text"] {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: radial-gradient(circle at top left, #020617, #020617);
+      color: var(--text);
+      padding: 9px 10px;
+      font-size: 0.8rem;
+      resize: vertical;
+      min-height: 70px;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+        background var(--transition-fast), transform var(--transition-fast);
+      font-family: var(--font-sans);
+    }
+
+    textarea:focus,
+    input[type="text"]:focus {
+      border-color: rgba(129, 140, 248, 0.9);
+      box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.6);
+      background: radial-gradient(circle at top left, #020617, #020617);
+      transform: translateY(-0.5px);
+    }
+
+    textarea::placeholder,
+    input::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .small-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .small-label span {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .badge-dot.good {
+      background: #22c55e;
+    }
+
+    .badge-dot.info {
+      background: #6366f1;
+    }
+
+    .badge-dot.warn {
+      background: #facc15;
+    }
+
+    .badge-dot.err {
+      background: #f97373;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.18), #020617);
+      color: #e5e7eb;
+      padding: 7px 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background var(--transition-med), transform var(--transition-med),
+        box-shadow var(--transition-med), border-color var(--transition-med);
+      backdrop-filter: blur(10px);
+    }
+
+    button.primary {
+      background: radial-gradient(circle at top left, #4f46e5, #312e81);
+      border-color: rgba(191, 219, 254, 0.4);
+      box-shadow: 0 14px 35px rgba(79, 70, 229, 0.6);
+    }
+
+    button.secondary {
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    button.ghost {
+      background: transparent;
+      border-style: dashed;
+      border-color: rgba(148, 163, 184, 0.5);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+
+    button:not(:disabled):hover {
+      transform: translateY(-1px) translateZ(0);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.9);
+      border-color: rgba(191, 219, 254, 0.7);
+    }
+
+    button.primary:not(:disabled):hover {
+      box-shadow: 0 18px 45px rgba(79, 70, 229, 0.8);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.9);
+    }
+
+    .btn-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(191, 219, 254, 0.7);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      background: radial-gradient(circle, rgba(191, 219, 254, 0.2), transparent 60%);
+    }
+
+    .btn-icon-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+    }
+
+    .btn-icon-spark {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: conic-gradient(
+        from 180deg,
+        #f97316,
+        #facc15,
+        #22c55e,
+        #22d3ee,
+        #6366f1,
+        #f97316
+      );
+      box-shadow: 0 0 12px rgba(129, 140, 248, 0.9);
+    }
+
+    .btn-icon-search {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(191, 219, 254, 0.7);
+      box-shadow: 0 0 10px rgba(129, 140, 248, 0.9);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .pill {
+      font-size: 0.7rem;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      color: var(--muted);
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: var(--shadow-chip);
+    }
+
+    .pill strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .pill-dot.emb {
+      background: #22d3ee;
+    }
+
+    .pill-dot.chunk {
+      background: #a855f7;
+    }
+
+    .pill-dot.vec {
+      background: #6366f1;
+    }
+
+    .pill-dot.prompt {
+      background: #22c55e;
+    }
+
+    .pill-dot.hall {
+      background: #f97316;
+    }
+
+    .code-block {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      background: radial-gradient(circle at top left, #020617, #020617);
+      border-radius: 10px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 8px 9px;
+      color: #e5e7eb;
+      max-height: 160px;
+      overflow: auto;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    .code-block::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(15, 23, 42, 0.4), transparent 40%);
+      pointer-events: none;
+    }
+
+    .code-line {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .code-key {
+      color: #a5b4fc;
+    }
+
+    .code-str {
+      color: #fbbf24;
+    }
+
+    .code-num {
+      color: #4ade80;
+    }
+
+    .code-comment {
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .status-left,
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .status-dot.ok {
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+    }
+
+    .status-dot.err {
+      background: #f97373;
+      box-shadow: 0 0 10px rgba(248, 113, 113, 0.9);
+    }
+
+    .status-dot.info {
+      background: #6366f1;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.9);
+    }
+
+    .status-text-strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .log {
+      font-size: 0.72rem;
+      color: var(--muted);
+      max-height: 120px;
+      overflow: auto;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px dashed rgba(55, 65, 81, 0.9);
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    .log-line {
+      margin-bottom: 2px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .log-tag {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: #9ca3af;
+      min-width: 52px;
+    }
+
+    .log-msg {
+      flex: 1;
+    }
+
+    .log-tag.ok {
+      color: #4ade80;
+    }
+
+    .log-tag.warn {
+      color: #facc15;
+    }
+
+    .log-tag.err {
+      color: #f97373;
+    }
+
+    .log-tag.step {
+      color: #60a5fa;
+    }
+
+    .highlight-chunk {
+      border-radius: 8px;
+      padding: 4px 6px;
+      margin: 2px 0;
+      background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.18), transparent 70%);
+      border: 1px solid rgba(79, 70, 229, 0.5);
+    }
+
+    .highlight-chunk strong {
+      color: #e5e7eb;
+    }
+
+    .answer-block {
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #e5e7eb;
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), #020617);
+      border-radius: 10px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 9px 10px;
+      max-height: 200px;
+      overflow: auto;
+    }
+
+    .answer-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .answer-meta {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .answer-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .answer-meta-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+    }
+
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .chip {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      color: var(--muted);
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .chip-dot.good {
+      background: #22c55e;
+    }
+
+    .chip-dot.bad {
+      background: #f97373;
+    }
+
+    .chip-dot.mid {
+      background: #facc15;
+    }
+
+    .chip-dot.neu {
+      background: #6366f1;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #22c55e, #6366f1);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      border: 2px solid #6366f1;
+      box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.4);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      border: 2px solid #6366f1;
+      box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.4);
+    }
+
+    .mini-tag {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      color: var(--muted);
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+    }
+
+    .fade {
+      opacity: 0.4;
+    }
+
+    .pulse {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.6);
+      }
+      50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 8px rgba(129, 140, 248, 0);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(129, 140, 248, 0);
+      }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- LEFT: DOCUMENT → CHUNK → EMBEDDINGS → VECTOR DB -->
+    <div class="pane">
+      <div class="header">
+        <div class="title-block">
+          <div class="title">
+            RAG Pipeline Simulator
+            <span class="title-pill">
+              <span class="title-pill-dot"></span>
+              Conceptual, HTML‑only
+            </span>
+          </div>
+          <div class="subtitle">
+            Walk through: documents → chunks → embeddings → vector DB → retrieval → prompt → answer.
+          </div>
+        </div>
+        <div class="step-indicator">
+          <div class="step-badge">
+            <span>Pipeline</span>
+            <div class="step-dot done"></div>
+            <div class="step-dot done"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOCUMENT INPUT -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>1. Documents</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot ok"></div>
+            Raw knowledge base
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="small-label">
+            <span>Paste your “corpus”</span>
+            <span class="mini-tag">Multiple paragraphs = multiple topics</span>
+          </div>
+          <textarea
+            id="docInput"
+            placeholder="Example:
+RAG (Retrieval-Augmented Generation) combines a vector search over external knowledge with an LLM to ground answers in retrieved context.
+
+Embeddings map text into high-dimensional vectors where semantic similarity becomes geometric proximity.
+
+Chunking splits long documents into smaller pieces so they fit in context windows and can be retrieved independently."
+          ></textarea>
+          <div class="btn-row">
+            <button id="btnChunk" class="primary">
+              <span class="btn-icon"><span class="btn-icon-dot"></span></span>
+              Chunk & Embed
+            </button>
+            <button id="btnClear" class="secondary">
+              <span class="btn-icon">×</span>
+              Reset
+            </button>
+            <span class="badge">
+              <span class="badge-dot info"></span>
+              This simulator uses fake embeddings to show the flow, not real ML.
+            </span>
+          </div>
+          <div class="status-bar">
+            <div class="status-left">
+              <div class="status-dot" id="docStatusDot"></div>
+              <span id="docStatusText">Waiting for documents…</span>
+            </div>
+            <div class="status-right">
+              <span id="docStats" class="mini-tag">0 chars</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHUNKING + EMBEDDINGS -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>2. Chunking & Embeddings</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot"></div>
+            Preprocessing
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="row">
+            <div>
+              <div class="small-label">
+                <span>Chunking strategy</span>
+                <span class="mini-tag">Simulated</span>
+              </div>
+              <div class="code-block" id="chunkView">
+                <div class="code-line code-comment">
+                  // Chunks will appear here after “Chunk & Embed”
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="small-label">
+                <span>Embeddings (fake vectors)</span>
+                <span class="mini-tag">Semantic space intuition</span>
+              </div>
+              <div class="code-block" id="embedView">
+                <div class="code-line code-comment">
+                  // Each chunk gets a random 4‑dimensional vector to simulate embeddings
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chips-row">
+            <div class="chip">
+              <div class="chip-dot good"></div>
+              <strong>Chunking</strong> = split text into smaller units
+            </div>
+            <div class="chip">
+              <div class="chip-dot neu"></div>
+              <strong>Embeddings</strong> = numbers capturing meaning
+            </div>
+            <div class="chip">
+              <div class="chip-dot mid"></div>
+              No LLM yet—this is all preprocessing.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VECTOR DB -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>3. Vector database</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot"></div>
+            Storage & retrieval
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="small-label">
+            <span>Stored entries</span>
+            <span class="mini-tag" id="vectorCount">0 vectors</span>
+          </div>
+          <div class="code-block" id="vectorView">
+            <div class="code-line code-comment">
+              // After embedding, each chunk is stored as: { id, text, embedding[] }
+            </div>
+          </div>
+          <div class="chips-row">
+            <div class="chip">
+              <div class="chip-dot good"></div>
+              Vector DB = key infra for RAG
+            </div>
+            <div class="chip">
+              <div class="chip-dot mid"></div>
+              We’ll do similarity search on these vectors at query time.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: QUERY → RETRIEVAL → PROMPT → ANSWER -->
+    <div class="pane">
+      <div class="header">
+        <div class="title-block">
+          <div class="title">
+            Retrieval & Generation
+            <span class="title-pill">
+              <span class="title-pill-dot"></span>
+              Query → context → “LLM”
+            </span>
+          </div>
+          <div class="subtitle">
+            Simulated similarity search, prompt construction, and grounded answer generation.
+          </div>
+        </div>
+        <div class="step-indicator">
+          <div class="step-badge">
+            <span>Pipeline</span>
+            <div class="step-dot done"></div>
+            <div class="step-dot done"></div>
+            <div class="step-dot active"></div>
+            <div class="step-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- QUERY + RETRIEVAL -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>4. Query & similarity search</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot warn"></div>
+            Retrieval quality matters
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="small-label">
+            <span>User query</span>
+            <span class="mini-tag">We’ll embed this too (fake)</span>
+          </div>
+          <input
+            id="queryInput"
+            type="text"
+            placeholder="Example: What is RAG and why do we use embeddings?"
+          />
+          <div class="slider-row">
+            <span>Top‑K chunks</span>
+            <input id="topKSlider" type="range" min="1" max="5" value="3" />
+            <span id="topKLabel" class="mini-tag">K = 3</span>
+          </div>
+          <div class="btn-row">
+            <button id="btnRetrieve" class="primary">
+              <span class="btn-icon"><span class="btn-icon-search"></span></span>
+              Run Retrieval
+            </button>
+            <button id="btnRandomQuery" class="ghost">
+              <span class="btn-icon">?</span>
+              Random query
+            </button>
+            <span class="badge">
+              <span class="badge-dot info"></span>
+              We compute cosine similarity between query vector and chunk vectors.
+            </span>
+          </div>
+          <div class="row">
+            <div>
+              <div class="small-label">
+                <span>Query embedding (fake)</span>
+              </div>
+              <div class="code-block" id="queryEmbedView">
+                <div class="code-line code-comment">
+                  // Will be generated when you run retrieval
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="small-label">
+                <span>Top‑K retrieved chunks</span>
+              </div>
+              <div class="code-block" id="retrievalView">
+                <div class="code-line code-comment">
+                  // Retrieved chunks ranked by similarity will appear here
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="status-bar">
+            <div class="status-left">
+              <div class="status-dot" id="retrievalStatusDot"></div>
+              <span id="retrievalStatusText">No retrieval yet.</span>
+            </div>
+            <div class="status-right">
+              <span id="retrievalStats" class="mini-tag">Similarity: n/a</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROMPT CONSTRUCTION -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>5. Prompt construction</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot"></div>
+            System + context + user
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="small-label">
+            <span>Final prompt sent to the LLM (simulated)</span>
+            <span class="mini-tag">This is where RAG “augments” the model</span>
+          </div>
+          <div class="code-block" id="promptView">
+            <div class="code-line code-comment">
+              // After retrieval, we’ll build a structured prompt with instructions + retrieved chunks + user query
+            </div>
+          </div>
+          <div class="chips-row">
+            <div class="chip">
+              <div class="chip-dot good"></div>
+              Good RAG = good prompt design
+            </div>
+            <div class="chip">
+              <div class="chip-dot mid"></div>
+              We explicitly tell the model to stay grounded in the retrieved context.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANSWER + HALLUCINATION CONTROL + LOG -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>6. Answer & hallucination control</span>
+          </div>
+          <div class="section-chip">
+            <div class="section-chip-dot warn"></div>
+            Simulated LLM
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="row">
+            <div>
+              <div class="answer-label">Grounded answer (simulated)</div>
+              <div class="answer-block" id="answerView">
+                The answer will be generated here using only the retrieved chunks, to mimic a grounded RAG response.
+              </div>
+              <div class="answer-meta" id="answerMeta">
+                <span><span class="answer-meta-dot"></span> Mode: grounded</span>
+                <span><span class="answer-meta-dot" style="background:#facc15;"></span> Hallucination risk: n/a</span>
+              </div>
+            </div>
+            <div>
+              <div class="small-label">
+                <span>Pipeline log</span>
+                <span class="mini-tag">Step‑by‑step trace</span>
+              </div>
+              <div class="log" id="logView">
+                <div class="log-line">
+                  <span class="log-tag step">[init]</span>
+                  <span class="log-msg">RAG simulator ready. Start by pasting documents and clicking “Chunk & Embed”.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chips-row">
+            <div class="chip">
+              <div class="chip-dot good"></div>
+              RAG reduces hallucinations by grounding answers in retrieved context.
+            </div>
+            <div class="chip">
+              <div class="chip-dot bad"></div>
+              If retrieval is bad, the answer can still hallucinate—even with RAG.
+            </div>
+            <div class="chip">
+              <div class="chip-dot neu"></div>
+              Evaluation: think in terms of Recall@K, relevance, and faithfulness.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -----------------------------
+    // Simple RAG simulator (no ML)
+    // -----------------------------
+
+    const docInput = document.getElementById("docInput");
+    const docStatusDot = document.getElementById("docStatusDot");
+    const docStatusText = document.getElementById("docStatusText");
+    const docStats = document.getElementById("docStats");
+
+    const chunkView = document.getElementById("chunkView");
+    const embedView = document.getElementById("embedView");
+    const vectorView = document.getElementById("vectorView");
+    const vectorCount = document.getElementById("vectorCount");
+
+    const queryInput = document.getElementById("queryInput");
+    const queryEmbedView = document.getElementById("queryEmbedView");
+    const retrievalView = document.getElementById("retrievalView");
+    const retrievalStatusDot = document.getElementById("retrievalStatusDot");
+    const retrievalStatusText = document.getElementById("retrievalStatusText");
+    const retrievalStats = document.getElementById("retrievalStats");
+
+    const promptView = document.getElementById("promptView");
+    const answerView = document.getElementById("answerView");
+    const answerMeta = document.getElementById("answerMeta");
+    const logView = document.getElementById("logView");
+
+    const btnChunk = document.getElementById("btnChunk");
+    const btnClear = document.getElementById("btnClear");
+    const btnRetrieve = document.getElementById("btnRetrieve");
+    const btnRandomQuery = document.getElementById("btnRandomQuery");
+
+    const topKSlider = document.getElementById("topKSlider");
+    const topKLabel = document.getElementById("topKLabel");
+
+    let vectorDB = []; // { id, text, embedding: [n] }
+    let lastQueryEmbedding = null;
+    let lastRetrieval = [];
+
+    // Utility: log
+    function log(tag, msg, type = "info") {
+      const line = document.createElement("div");
+      line.className = "log-line";
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "log-tag " + (type === "ok" ? "ok" : type === "err" ? "err" : type === "step" ? "step" : "");
+      tagSpan.textContent = `[${tag}]`;
+      const msgSpan = document.createElement("span");
+      msgSpan.className = "log-msg";
+      msgSpan.textContent = msg;
+      line.appendChild(tagSpan);
+      line.appendChild(msgSpan);
+      logView.appendChild(line);
+      logView.scrollTop = logView.scrollHeight;
+    }
+
+    // Utility: fake embedding (4D vector)
+    function fakeEmbedding(text) {
+      // Deterministic-ish based on text hash
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) {
+        hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+      }
+      const vec = [];
+      for (let i = 0; i < 4; i++) {
+        const v = ((hash >> (i * 8)) & 0xff) / 255;
+        vec.push(parseFloat((v * 2 - 1).toFixed(3))); // [-1, 1]
+      }
+      return vec;
+    }
+
+    // Utility: cosine similarity
+    function cosineSim(a, b) {
+      let dot = 0,
+        na = 0,
+        nb = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
+      }
+      if (na === 0 || nb === 0) return 0;
+      return dot / (Math.sqrt(na) * Math.sqrt(nb));
+    }
+
+    // Utility: pretty print vector
+    function formatVec(v) {
+      return "[" + v.map((x) => x.toFixed(3)).join(", ") + "]";
+    }
+
+    // Utility: escape HTML
+    function esc(str) {
+      return str.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    }
+
+    // Update doc stats
+    docInput.addEventListener("input", () => {
+      const len = docInput.value.length;
+      docStats.textContent = `${len} chars`;
+      if (len > 0) {
+        docStatusDot.classList.add("ok");
+        docStatusText.textContent = "Documents ready. Click “Chunk & Embed”.";
+      } else {
+        docStatusDot.classList.remove("ok");
+        docStatusText.textContent = "Waiting for documents…";
+      }
+    });
+
+    // Chunk & Embed
+    btnChunk.addEventListener("click", () => {
+      const text = docInput.value.trim();
+      if (!text) {
+        alert("Paste some documents first.");
+        return;
+      }
+
+      log("chunk", "Starting chunking + embedding pipeline…", "step");
+
+      // Simple chunking: split by double newline, then by ~280 chars
+      const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+      const chunks = [];
+      const maxLen = 280;
+
+      paragraphs.forEach((p) => {
+        if (p.length <= maxLen) {
+          chunks.push(p);
+        } else {
+          let start = 0;
+          while (start < p.length) {
+            const slice = p.slice(start, start + maxLen);
+            chunks.push(slice.trim());
+            start += maxLen;
+          }
+        }
+      });
+
+      // Build vector DB
+      vectorDB = [];
+      chunks.forEach((chunk, idx) => {
+        const emb = fakeEmbedding(chunk);
+        vectorDB.push({
+          id: idx + 1,
+          text: chunk,
+          embedding: emb,
+        });
+      });
+
+      // Update chunk view
+      chunkView.innerHTML = "";
+      if (chunks.length === 0) {
+        const line = document.createElement("div");
+        line.className = "code-line code-comment";
+        line.textContent = "// No chunks produced.";
+        chunkView.appendChild(line);
+      } else {
+        chunks.forEach((chunk, i) => {
+          const line = document.createElement("div");
+          line.className = "code-line";
+          line.innerHTML =
+            '<span class="code-key">chunk_' +
+            (i + 1) +
+            "</span>: " +
+            '<span class="code-str">"' +
+            esc(chunk.slice(0, 120)) +
+            (chunk.length > 120 ? "…" : "") +
+            '"</span>';
+          chunkView.appendChild(line);
+        });
+      }
+
+      // Update embedding view
+      embedView.innerHTML = "";
+      vectorDB.forEach((entry) => {
+        const line = document.createElement("div");
+        line.className = "code-line";
+        line.innerHTML =
+          '<span class="code-key">emb_' +
+          entry.id +
+          "</span>: " +
+          '<span class="code-num">' +
+          esc(formatVec(entry.embedding)) +
+          "</span>";
+        embedView.appendChild(line);
+      });
+
+      // Update vector DB view
+      vectorView.innerHTML = "";
+      vectorDB.forEach((entry) => {
+        const line = document.createElement("div");
+        line.className = "code-line";
+        line.innerHTML =
+          "{ " +
+          '<span class="code-key">id</span>: ' +
+          '<span class="code-num">' +
+          entry.id +
+          "</span>, " +
+          '<span class="code-key">len</span>: ' +
+          '<span class="code-num">' +
+          entry.text.length +
+          "</span>, " +
+          '<span class="code-key">embedding</span>: ' +
+          '<span class="code-num">' +
+          esc(formatVec(entry.embedding)) +
+          "</span> }";
+        vectorView.appendChild(line);
+      });
+
+      vectorCount.textContent = `${vectorDB.length} vectors`;
+      docStatusDot.classList.add("ok");
+      docStatusText.textContent = `Chunked into ${vectorDB.length} pieces. Ready for retrieval.`;
+
+      retrievalView.innerHTML =
+        '<div class="code-line code-comment">// Run retrieval to see top‑K chunks.</div>';
+      queryEmbedView.innerHTML =
+        '<div class="code-line code-comment">// Query embedding will appear here.</div>';
+      promptView.innerHTML =
+        '<div class="code-line code-comment">// Prompt will be constructed after retrieval.</div>';
+      answerView.textContent =
+        "The answer will be generated here using only the retrieved chunks, to mimic a grounded RAG response.";
+      answerMeta.innerHTML =
+        '<span><span class="answer-meta-dot"></span> Mode: grounded</span>' +
+        '<span><span class="answer-meta-dot" style="background:#facc15;"></span> Hallucination risk: n/a</span>';
+
+      retrievalStatusDot.classList.remove("ok", "err", "info");
+      retrievalStatusText.textContent = "No retrieval yet.";
+      retrievalStats.textContent = "Similarity: n/a";
+
+      log("chunk", `Produced ${vectorDB.length} chunks and stored them in the vector DB.`, "ok");
+    });
+
+    // Clear
+    btnClear.addEventListener("click", () => {
+      docInput.value = "";
+      docStats.textContent = "0 chars";
+      docStatusDot.classList.remove("ok");
+      docStatusText.textContent = "Waiting for documents…";
+
+      vectorDB = [];
+      vectorCount.textContent = "0 vectors";
+
+      chunkView.innerHTML =
+        '<div class="code-line code-comment">// Chunks will appear here after “Chunk & Embed”</div>';
+      embedView.innerHTML =
+        '<div class="code-line code-comment">// Each chunk gets a random 4‑dimensional vector to simulate embeddings</div>';
+      vectorView.innerHTML =
+        '<div class="code-line code-comment">// After embedding, each chunk is stored as: { id, text, embedding[] }</div>';
+
+      queryInput.value = "";
+      queryEmbedView.innerHTML =
+        '<div class="code-line code-comment">// Will be generated when you run retrieval</div>';
+      retrievalView.innerHTML =
+        '<div class="code-line code-comment">// Retrieved chunks ranked by similarity will appear here</div>';
+      retrievalStatusDot.classList.remove("ok", "err", "info");
+      retrievalStatusText.textContent = "No retrieval yet.";
+      retrievalStats.textContent = "Similarity: n/a";
+
+      promptView.innerHTML =
+        '<div class="code-line code-comment">// After retrieval, we’ll build a structured prompt with instructions + retrieved chunks + user query</div>';
+      answerView.textContent =
+        "The answer will be generated here using only the retrieved chunks, to mimic a grounded RAG response.";
+      answerMeta.innerHTML =
+        '<span><span class="answer-meta-dot"></span> Mode: grounded</span>' +
+        '<span><span class="answer-meta-dot" style="background:#facc15;"></span> Hallucination risk: n/a</span>';
+
+      log("reset", "Simulator state cleared.", "step");
+    });
+
+    // Top-K slider
+    topKSlider.addEventListener("input", () => {
+      topKLabel.textContent = `K = ${topKSlider.value}`;
+    });
+
+    // Random query
+    const sampleQueries = [
+      "Explain RAG in simple terms.",
+      "Why do we need embeddings in RAG?",
+      "How does chunking affect retrieval quality?",
+      "What is the role of the vector database?",
+      "How does RAG reduce hallucinations?"
+    ];
+    btnRandomQuery.addEventListener("click", () => {
+      const q = sampleQueries[Math.floor(Math.random() * sampleQueries.length)];
+      queryInput.value = q;
+    });
+
+    // Retrieval
+    btnRetrieve.addEventListener("click", () => {
+      if (vectorDB.length === 0) {
+        alert("You need to chunk & embed documents first.");
+        return;
+      }
+      const query = queryInput.value.trim();
+      if (!query) {
+        alert("Type a query first.");
+        return;
+      }
+
+      log("retr", "Running similarity search over vector DB…", "step");
+
+      // Fake query embedding
+      const qEmb = fakeEmbedding(query);
+      lastQueryEmbedding = qEmb;
+
+      queryEmbedView.innerHTML = "";
+      const qLine = document.createElement("div");
+      qLine.className = "code-line";
+      qLine.innerHTML =
+        '<span class="code-key">query_emb</span>: ' +
+        '<span class="code-num">' +
+        esc(formatVec(qEmb)) +
+        "</span>";
+      queryEmbedView.appendChild(qLine);
+
+      // Compute similarities
+      const scored = vectorDB.map((entry) => {
+        const sim = cosineSim(qEmb, entry.embedding);
+        return { ...entry, sim };
+      });
+
+      scored.sort((a, b) => b.sim - a.sim);
+
+      const k = Math.min(parseInt(topKSlider.value, 10), scored.length);
+      const topK = scored.slice(0, k);
+      lastRetrieval = topK;
+
+      retrievalView.innerHTML = "";
+      topK.forEach((entry, idx) => {
+        const line = document.createElement("div");
+        line.className = "code-line";
+        const simStr = entry.sim.toFixed(3);
+        line.innerHTML =
+          '<span class="code-key">rank_' +
+          (idx + 1) +
+          "</span>: { " +
+          '<span class="code-key">id</span>: ' +
+          '<span class="code-num">' +
+          entry.id +
+          "</span>, " +
+          '<span class="code-key">sim</span>: ' +
+          '<span class="code-num">' +
+          simStr +
+          "</span>, " +
+          '<span class="code-key">text</span>: ' +
+          '<span class="code-str">"' +
+          esc(entry.text.slice(0, 80)) +
+          (entry.text.length > 80 ? "…" : "") +
+          '"</span> }';
+        retrievalView.appendChild(line);
+      });
+
+      const avgSim =
+        topK.reduce((acc, e) => acc + e.sim, 0) / (topK.length || 1);
+      retrievalStats.textContent = `Top‑K = ${k}, avg similarity ≈ ${avgSim.toFixed(3)}`;
+
+      retrievalStatusDot.classList.remove("err");
+      retrievalStatusDot.classList.add("info");
+      retrievalStatusText.textContent = `Retrieved ${k} chunks ranked by cosine similarity.`;
+
+      log(
+        "retr",
+        `Retrieved top‑${k} chunks. Best similarity ≈ ${topK[0].sim.toFixed(3)}.`,
+        "ok"
+      );
+
+      // Build prompt
+      buildPrompt(query, topK);
+
+      // Generate answer
+      generateAnswer(query, topK, avgSim);
+    });
+
+    // Build prompt (simulated)
+    function buildPrompt(query, chunks) {
+      promptView.innerHTML = "";
+
+      const lines = [];
+
+      lines.push(
+        '<span class="code-comment">// System: You are a helpful assistant that must answer using ONLY the provided context.</span>'
+      );
+      lines.push(
+        '<span class="code-key">SYSTEM</span>: <span class="code-str">"Answer concisely. If the answer is not in the context, say you don\'t know."</span>'
+      );
+      lines.push("");
+
+      lines.push(
+        '<span class="code-comment">// Retrieved context (top‑K chunks)</span>'
+      );
+      chunks.forEach((c, idx) => {
+        lines.push(
+          '<span class="code-key">CONTEXT_' +
+            (idx + 1) +
+            "</span>: " +
+            '<span class="code-str">"' +
+            esc(c.text) +
+            '"</span>'
+        );
+      });
+
+      lines.push("");
+      lines.push(
+        '<span class="code-comment">// User question</span>'
+      );
+      lines.push(
+        '<span class="code-key">USER</span>: <span class="code-str">"' +
+          esc(query) +
+          '"</span>'
+      );
+
+      lines.forEach((html) => {
+        const line = document.createElement("div");
+        line.className = "code-line";
+        line.innerHTML = html;
+        promptView.appendChild(line);
+      });
+
+      log("prompt", "Constructed a prompt with system instructions + context + user query.", "step");
+    }
+
+    // Generate answer (simulated grounded answer)
+    function generateAnswer(query, chunks, avgSim) {
+      const qLower = query.toLowerCase();
+      const answerParts = [];
+
+      // Very rough heuristic: look for key concepts in chunks
+      function contains(term) {
+        return chunks.some((c) => c.text.toLowerCase().includes(term));
+      }
+
+      if (contains("retrieval-augmented generation") || contains("rag") || qLower.includes("rag")) {
+        answerParts.push(
+          "RAG (Retrieval‑Augmented Generation) is a pattern where an LLM is combined with a retrieval system over external knowledge."
+        );
+        answerParts.push(
+          "Instead of relying only on its internal training, the model first retrieves relevant chunks from a vector database and then uses those chunks as context to answer the query."
+        );
+      }
+
+      if (contains("embedding") || qLower.includes("embedding")) {
+        answerParts.push(
+          "Embeddings map text into high‑dimensional vectors so that semantically similar pieces of text are close together in that vector space."
+        );
+        answerParts.push(
+          "In RAG, both the stored chunks and the user query are embedded, and similarity search over these vectors finds the most relevant chunks."
+        );
+      }
+
+      if (contains("chunk") || qLower.includes("chunk")) {
+        answerParts.push(
+          "Chunking splits long documents into smaller pieces so they fit into the model’s context window and can be retrieved independently."
+        );
+      }
+
+      if (contains("vector") || qLower.includes("vector database")) {
+        answerParts.push(
+          "A vector database stores the chunks along with their embeddings and supports efficient similarity search at query time."
+        );
+      }
+
+      if (answerParts.length === 0) {
+        answerParts.push(
+          "Based on the retrieved context, I don’t have enough grounded information to confidently answer this question."
+        );
+        answerParts.push(
+          "In a real RAG system, this is where you’d want better documents, better chunking, or improved retrieval."
+        );
+      }
+
+      const answerText = answerParts.join(" ");
+
+      answerView.innerHTML = "";
+      const p = document.createElement("div");
+      p.textContent = answerText;
+      answerView.appendChild(p);
+
+      // Show which chunks were used
+      const used = document.createElement("div");
+      used.style.marginTop = "8px";
+      used.style.fontSize = "0.75rem";
+      used.style.color = "#9ca3af";
+      used.innerHTML = "Context used:";
+      chunks.forEach((c, idx) => {
+        const div = document.createElement("div");
+        div.className = "highlight-chunk";
+        div.innerHTML =
+          "<strong>Chunk " +
+          (idx + 1) +
+          " (sim ≈ " +
+          c.sim.toFixed(3) +
+          "):</strong> " +
+          esc(c.text.slice(0, 140)) +
+          (c.text.length > 140 ? "…" : "");
+        used.appendChild(div);
+      });
+      answerView.appendChild(used);
+
+      // Update meta
+      const risk =
+        avgSim >= 0.6 ? "low" : avgSim >= 0.3 ? "medium" : "high";
+      const riskColor =
+        avgSim >= 0.6 ? "#22c55e" : avgSim >= 0.3 ? "#facc15" : "#f97373";
+
+      answerMeta.innerHTML =
+        '<span><span class="answer-meta-dot"></span> Mode: grounded (simulated)</span>' +
+        `<span><span class="answer-meta-dot" style="background:${riskColor};"></span> Hallucination risk: ${risk}</span>`;
+
+      log(
+        "answer",
+        `Generated a grounded answer using ${chunks.length} retrieved chunks (avg similarity ≈ ${avgSim.toFixed(
+          3
+        )}).`,
+        "ok"
+      );
+    }
+  </script>
+</body>
+</html>
